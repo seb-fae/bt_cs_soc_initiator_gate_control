@@ -31,7 +31,46 @@
 #ifndef APP_H
 #define APP_H
 
+//#define LOG_ENABLED
+
 #include "ble_peer_manager_common.h"
+
+// initiator content
+#include "cs_antenna.h"
+#include "cs_result.h"
+#include "cs_initiator.h"
+#include "cs_initiator_client.h"
+#include "cs_initiator_config.h"
+#include "cs_initiator_display_core.h"
+#include "cs_initiator_display.h"
+
+// Enums, structs, typedef
+
+// Measurement structure
+typedef struct {
+  float distance_filtered;
+  float distance_raw;
+  float likeliness;
+  float distance_estimate_rssi;
+  float velocity;
+  float bit_error_rate;
+} cs_measurement_data_t;
+
+// CS initiator instance
+typedef struct {
+  uint8_t conn_handle;
+  uint32_t measurement_cnt;
+  uint32_t ranging_counter;
+  cs_measurement_data_t measurement_mainmode;
+  cs_measurement_data_t measurement_submode;
+  cs_intermediate_result_t measurement_progress;
+  bool measurement_arrived;
+  bool measurement_progress_changed;
+  bool read_remote_capabilities;
+  uint8_t number_of_measurements;
+} cs_initiator_instances_t;
+
+#define BOARD_EVB
 
 /**************************************************************************//**
  * Peer manager event handler.

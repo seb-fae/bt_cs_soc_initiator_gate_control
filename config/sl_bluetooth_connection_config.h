@@ -35,7 +35,7 @@
 // <o SL_BT_CONFIG_MAX_CONNECTIONS> Max number of connections reserved for user <0-32>
 // <i> Default: 4
 // <i> Define the number of connections the application needs.
-#define SL_BT_CONFIG_MAX_CONNECTIONS     (4)
+#define SL_BT_CONFIG_MAX_CONNECTIONS     1
 
 // <o SL_BT_CONFIG_CONNECTION_DATA_LENGTH> Preferred maximum TX payload octets <27-251>
 // <i> Default: 251

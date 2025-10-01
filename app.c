@@ -43,16 +43,9 @@
 #include "app_config.h"
 #include "app_timer.h"
 
-// initiator content
-#include "cs_antenna.h"
-#include "cs_result.h"
-#include "cs_initiator.h"
-#include "cs_initiator_client.h"
-#include "cs_initiator_config.h"
-#include "cs_initiator_display_core.h"
-#include "cs_initiator_display.h"
-
 #include "em_gpio.h"
+
+
 
 // RAS
 #include "cs_ras_client.h"
@@ -83,33 +76,6 @@
 #define BT_ADDR_LEN                      sizeof(bd_addr)
 #define DISPLAY_REFRESH_RATE             1000u // ms
 #define ABS(x)                           ((x < 0) ? ((-1) * x) : x)
-
-// -----------------------------------------------------------------------------
-// Enums, structs, typedef
-
-// Measurement structure
-typedef struct {
-  float distance_filtered;
-  float distance_raw;
-  float likeliness;
-  float distance_estimate_rssi;
-  float velocity;
-  float bit_error_rate;
-} cs_measurement_data_t;
-
-// CS initiator instance
-typedef struct {
-  uint8_t conn_handle;
-  uint32_t measurement_cnt;
-  uint32_t ranging_counter;
-  cs_measurement_data_t measurement_mainmode;
-  cs_measurement_data_t measurement_submode;
-  cs_intermediate_result_t measurement_progress;
-  bool measurement_arrived;
-  bool measurement_progress_changed;
-  bool read_remote_capabilities;
-  uint8_t number_of_measurements;
-} cs_initiator_instances_t;
 
 // -----------------------------------------------------------------------------
 // Static function declarations
@@ -151,7 +117,6 @@ static app_timer_t display_timer;
 void app_init(void)
 {
   sl_status_t sc = SL_STATUS_OK;
-
   trace_init();
 
   // initialize initiator instances
@@ -230,247 +195,14 @@ void app_init(void)
   // Put your additional application init code here!                         //
   // This is called once during start-up.                                    //
   /////////////////////////////////////////////////////////////////////////////
-
-
-  GPIO_PinModeSet(gpioPortD, 2, gpioModePushPull, 0);
-  GPIO_PinModeSet(gpioPortA, 4, gpioModePushPull, 0);
-}
-enum gate_state_e
-{
-    DOOR_CLOSED,
-    DOOR_OPENNED,
-};
-
-enum reflector_state_e
-{
-    JUST_CONNECTED,
-    MOVING,
-    MOVING_AWAY,
-    MOVING_CLOSER,
-    RED_ZONE,
-};
-
-enum gate_command_state_e
-{
-  RELAY_POSITION_0,
-  RELAY_POSITION_1,
-  RELAY_POSITION_2,
-};
-
-volatile enum reflector_state_e reflector_state[CS_INITIATOR_MAX_CONNECTIONS];
-volatile uint32_t baseline[CS_INITIATOR_MAX_CONNECTIONS];
-volatile uint32_t pdistance[CS_INITIATOR_MAX_CONNECTIONS];
-volatile enum gate_state_e gate_state = DOOR_CLOSED;
-
-//#define GATE_AUTO_CLOSE_MODE
-
-#define NEW_VALUE_WEIGHT 5
-#define DISTANCE_RED_ZONE 1000
-#define DISTANCE_OPENING_ZONE 40000
-#define MOVING_THRESHOLD 500
-
-uint8_t volatile control_disable = 0;
-
-sl_status_t status;
-sl_sleeptimer_timer_handle_t my_timer;
-uint32_t timer_timeout = 900000;
-uint32_t relay_delay = (500 * 32768)/1000;
-
-enum gate_command_state_e relay_state = RELAY_POSITION_0;
-
-void my_timer_callback(sl_sleeptimer_timer_handle_t *handle, void *data)
-{
-  gate_state = DOOR_CLOSED;
 }
 
-void open_callback(sl_sleeptimer_timer_handle_t *handle, void *data)
-{
-  relay_sequence(1);
-}
-
-void close_callback(sl_sleeptimer_timer_handle_t *handle, void *data)
-{
-  relay_sequence(0);
-}
-
-/* Asynchronous relay command */
-void relay_sequence(uint8_t open)
-{
-  /* relay sequence */
-  printf("rs : %d\n", relay_state);
-  switch (relay_state)
-  {
-    case RELAY_POSITION_0:
-      if (open)
-        GPIO_PinModeSet(gpioPortD, 2, gpioModePushPull, 0);
-      else
-        GPIO_PinModeSet(gpioPortA, 4, gpioModePushPull, 0);
-      relay_state = RELAY_POSITION_1;
-      break;
-    case RELAY_POSITION_1:
-      if (open)
-        GPIO_PinModeSet(gpioPortD, 2, gpioModePushPull, 1);
-      else
-        GPIO_PinModeSet(gpioPortA, 4, gpioModePushPull, 1);
-      relay_state = RELAY_POSITION_2;
-      break;
-    case RELAY_POSITION_2:
-      if (open)
-        GPIO_PinModeSet(gpioPortD, 2, gpioModePushPull, 0);
-      else
-        GPIO_PinModeSet(gpioPortA, 4, gpioModePushPull, 0);
-      relay_state = RELAY_POSITION_0;
-      return;
-  }
-
-  if (open)
-    status = sl_sleeptimer_start_timer(&my_timer, relay_delay, open_callback, (void *)NULL, 0, 0);
-  else
-    status = sl_sleeptimer_start_timer(&my_timer, relay_delay, close_callback, (void *)NULL, 0, 0);
-}
-
-void try_open_gate(uint8_t index, uint32_t distance)
-{
-  switch (gate_state)
-  {
-    case DOOR_OPENNED:
-     /* Door already opened, nothing to do */
-      return;
-    default:
-      break;
-  }
-
-  if (relay_state != RELAY_POSITION_0)
-  /* An action is already on-going on relays */
-    return;
-
-  for (uint8_t i = 0; i < CS_INITIATOR_MAX_CONNECTIONS; i++)
-  {
-    if (reflector_state[i] == RED_ZONE)
-    /* At least one reflector is in risk area */
-      return;
-  }
-
-  if (distance > DISTANCE_OPENING_ZONE)
-  /* Just a security not to open the door too soon */
-    return;
-
-  if (distance >= baseline[index])
-  /* We are moving away */
-    return;
-
-  if ((baseline[index] - distance) < MOVING_THRESHOLD)
-  /* We are moving closer */
-    return;
-
-  gate_state = DOOR_OPENNED;
-  relay_sequence(1);
-
-#ifdef GATE_AUTO_CLOSE_MODE
-  /* Gate will auto close after user timeout*/
-  status = sl_sleeptimer_start_timer(&my_timer,timer_timeout, my_timer_callback, (void *)NULL, 0, 0);
-#endif
-
-  printf("OPENNING\n");
-}
-
-void try_close_gate(uint8_t index, uint32_t distance)
-{
-
-  switch (gate_state)
-  {
-    case DOOR_CLOSED:
-     /* Door already opened, nothing to do */
-      return;
-    default:
-      break;
-  }
-
-  if (relay_state != RELAY_POSITION_0)
-  /* An action is already on-going on relays */
-    return;
-
-  for (uint8_t i = 0; i < CS_INITIATOR_MAX_CONNECTIONS; i++)
-  {
-    if (reflector_state[i] == RED_ZONE)
-    /* At least one reflector is in risk area */
-      return;
-  }
-
-  if (distance < baseline[index])
-  /* We are moving closer */
-    return;
 
 
-  if ((distance - baseline[index]) < MOVING_THRESHOLD)
-  /* We are moving closer */
-    return;
 
-  gate_state = DOOR_CLOSED;
-  relay_sequence(0);
 
-  printf("CLOSING\n");
-}
 
-void process_measure(uint8_t index)
-{
-  cs_initiator_instances_t * initiator = &cs_initiator_instances[index];
-  uint32_t distance = (uint32_t)(initiator->measurement_mainmode.distance_filtered * 1000.f);
 
-  switch (reflector_state[index])
-  {
-    case JUST_CONNECTED:
-      baseline[index] = distance;
-      pdistance[index] = distance;
-      break;
-    default:
-      distance = (distance + pdistance[index])/2;
-      break;
-  }
-
-  printf("d: %d, b: %d\n", distance, baseline[index]);
- // printf("s: %d \n", reflector_state[index]);
-
-  switch (reflector_state[index])
-  {
-    case JUST_CONNECTED:
-      reflector_state[index] = MOVING;
-      break;
-    case MOVING:
-      /* This state is used to determine direction of mouvement */
-      if (distance > baseline[index])
-      /* We are moving away */
-        reflector_state[index] = MOVING_AWAY;
-      else if (distance < baseline[index])
-      /* We are moving closer */
-        reflector_state[index] = MOVING_CLOSER;
-      break;
-    case MOVING_CLOSER:
-      if (distance <= DISTANCE_RED_ZONE)
-      /* Reflector enters red zone */
-         reflector_state[index] = RED_ZONE;
-      else if (distance > baseline[index])
-      /* We are moving away */
-        reflector_state[index] = MOVING;
-      try_open_gate(index, distance);
-      break;
-    case MOVING_AWAY:
-      if (distance < baseline[index])
-      /* We are moving closer */
-        reflector_state[index] = MOVING;
-      try_close_gate(index, distance);
-      break;
-    case RED_ZONE:
-      if (distance > DISTANCE_RED_ZONE)
-      /* We are leaving the red zone */
-        reflector_state[index] = MOVING_AWAY;
-      break;
-
-  }
-
-  baseline[index] = distance * NEW_VALUE_WEIGHT + baseline[index] * (100 - NEW_VALUE_WEIGHT);
-  baseline[index] /= 100;
-}
 
 /******************************************************************************
  * Application Process Action
@@ -479,10 +211,12 @@ void app_process_action(void)
 {
   for (uint8_t i = 0u; i < CS_INITIATOR_MAX_CONNECTIONS; i++) {
     if (cs_initiator_instances[i].measurement_arrived) {
+      process_measure(i, cs_initiator_instances + i);
+
       // write results to the display & to the iostream
       cs_initiator_instances[i].measurement_arrived = false;
-      process_measure(i);
-/*
+
+#ifdef LOG_ENABLED
       log_info(APP_INSTANCE_PREFIX "# %04lu --- Ranging Counter = %04lu" NL,
                cs_initiator_instances[i].conn_handle,
                cs_initiator_instances[i].measurement_cnt,
@@ -561,7 +295,7 @@ void app_process_action(void)
                                        cs_initiator_instances[i].measurement_progress.progress_percentage,
                                        rtl_config.algo_mode,
                                        initiator_config.cs_main_mode);
-   */
+#endif
     } else if (cs_initiator_instances[i].measurement_progress_changed) {
       // write measurement progress to the display without changing the last valid
       // measurement results
@@ -587,7 +321,6 @@ void app_process_action(void)
                                        rtl_config.algo_mode,
                                        initiator_config.cs_main_mode);
     }
-
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1037,7 +770,12 @@ static void cs_on_error(uint8_t conn_handle, cs_error_event_t err_evt, sl_status
 
 // -----------------------------------------------------------------------------
 // Event / callback definitions
+// The advertising set handle allocated from Bluetooth stack.
+static uint8_t advertising_set_handle = 0xff;
+#include "sl_simple_button_btn0_config.h"
+#include "gatt_db.h"
 
+volatile uint8_t ota_mode = 0;
 /**************************************************************************//**
  * Bluetooth stack event handler
  *
@@ -1048,6 +786,9 @@ void sl_bt_on_event(sl_bt_msg_t * evt)
   sl_status_t sc;
   uint8_t instance_num;
   const char* device_name = REFLECTOR_DEVICE_NAME;
+  bd_addr address;
+  uint8_t address_type;
+  uint8_t system_id[8];
 
   switch (SL_BT_MSG_ID(evt->header)) {
     // -------------------------------
@@ -1066,51 +807,118 @@ void sl_bt_on_event(sl_bt_msg_t * evt)
       log_info(APP_PREFIX "Minimum system TX power is set to: %d dBm" NL, min_tx_power_x10 / 10);
       log_info(APP_PREFIX "Maximum system TX power is set to: %d dBm" NL, max_tx_power_x10 / 10);
 
-      // Reset to initial state
-      ble_peer_manager_central_init();
-      ble_peer_manager_filter_init();
-      cs_initiator_init();
+      uint8_t button_state = GPIO_PinInGet(SL_SIMPLE_BUTTON_BTN0_PORT, SL_SIMPLE_BUTTON_BTN0_PIN);
 
-      // Print the Bluetooth address
-      bd_addr address;
-      uint8_t address_type;
-      sc = sl_bt_gap_get_identity_address(&address, &address_type);
-      app_assert_status(sc);
-      log_info(APP_PREFIX "Bluetooth %s address: %02X:%02X:%02X:%02X:%02X:%02X\n",
-               address_type ? "static random" : "public device",
-               address.addr[5],
-               address.addr[4],
-               address.addr[3],
-               address.addr[2],
-               address.addr[1],
-               address.addr[0]);
+      if (button_state == 0)
+      /* Button pressed */
+      {
+        ota_mode = 1;
+        /* Set LED ON */
+        GPIO_PinModeSet(gpioPortD, 4, gpioModePushPull, 1);
+        // Extract unique ID from BT Address.
+         sc = sl_bt_system_get_identity_address(&address, &address_type);
+         app_assert(sc == SL_STATUS_OK,
+                       "[E: 0x%04x] Failed to get Bluetooth address\n",
+                       (int)sc);
 
-      sc = cs_antenna_configure(CS_INITIATOR_ANTENNA_OFFSET);
-      app_assert_status(sc);
+         // Pad and reverse unique ID to get System ID.
+         system_id[0] = address.addr[5];
+         system_id[1] = address.addr[4];
+         system_id[2] = address.addr[3];
+         system_id[3] = 0xFF;
+         system_id[4] = 0xFE;
+         system_id[5] = address.addr[2];
+         system_id[6] = address.addr[1];
+         system_id[7] = address.addr[0];
 
-      // Filter for advertised name (CS_RFLCT)
-      sc = ble_peer_manager_set_filter_device_name(device_name,
-                                                   strlen(device_name),
-                                                   false);
-      app_assert_status(sc);
+         sc = sl_bt_gatt_server_write_attribute_value(gattdb_system_id,
+                                                      0,
+                                                      sizeof(system_id),
+                                                      system_id);
+         app_assert(sc == SL_STATUS_OK,
+                       "[E: 0x%04x] Failed to write attribute\n",
+                       (int)sc);
 
-      uint16_t ras_service_uuid = CS_RAS_SERVICE_UUID;
-      sc = ble_peer_manager_set_filter_service_uuid16((sl_bt_uuid_16_t *)&ras_service_uuid);
-      app_assert_status(sc);
+         // Create an advertising set.
+         sc = sl_bt_advertiser_create_set(&advertising_set_handle);
+         app_assert(sc == SL_STATUS_OK,
+                       "[E: 0x%04x] Failed to create advertising set\n",
+                       (int)sc);
 
-#ifndef SL_CATALOG_CS_INITIATOR_CLI_PRESENT
-      sc = ble_peer_manager_central_create_connection();
-      app_assert_status(sc);
-      cs_initiator_display_start_scanning();
-      // Start scanning for reflector connections
-      log_info(APP_PREFIX "Scanning started for reflector connections..." NL);
-#else
-      log_info("CS CLI is active." NL);
-#endif // SL_CATALOG_CS_INITIATOR_CLI_PRESENT
+         // Set advertising interval to 100ms.
+         sc = sl_bt_advertiser_set_timing(
+           advertising_set_handle,
+           160, // min. adv. interval (milliseconds * 1.6)
+           160, // max. adv. interval (milliseconds * 1.6)
+           0,   // adv. duration
+           0);  // max. num. adv. events
+         app_assert(sc == SL_STATUS_OK,
+                       "[E: 0x%04x] Failed to set advertising timing\n",
+                       (int)sc);
+         // Start general advertising and enable connections.
+         sc = sl_bt_legacy_advertiser_generate_data(advertising_set_handle,
+                                                    sl_bt_advertiser_general_discoverable);
+         app_assert(sc == SL_STATUS_OK,
+                       "[E: 0x%04x] Failed to generate data\n",
+                       (int)sc);
+         sc = sl_bt_legacy_advertiser_start(advertising_set_handle,
+                                            sl_bt_legacy_advertiser_connectable);
+         app_assert(sc == SL_STATUS_OK,
+                       "[E: 0x%04x] Failed to start advertising\n",
+                       (int)sc);
 
-      break;
+         log_info(APP_PREFIX "Starting Advertising..." NL);
+      }
+      else
+      {
+        // Reset to initial state
+        ble_peer_manager_central_init();
+        ble_peer_manager_filter_init();
+        cs_initiator_init();
+
+        // Print the Bluetooth address
+        bd_addr address;
+        uint8_t address_type;
+        sc = sl_bt_gap_get_identity_address(&address, &address_type);
+        app_assert_status(sc);
+        log_info(APP_PREFIX "Bluetooth %s address: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                 address_type ? "static random" : "public device",
+                 address.addr[5],
+                 address.addr[4],
+                 address.addr[3],
+                 address.addr[2],
+                 address.addr[1],
+                 address.addr[0]);
+
+        sc = cs_antenna_configure(CS_INITIATOR_ANTENNA_OFFSET);
+        app_assert_status(sc);
+
+        // Filter for advertised name (CS_RFLCT)
+        sc = ble_peer_manager_set_filter_device_name(device_name,
+                                                     strlen(device_name),
+                                                     false);
+        app_assert_status(sc);
+
+        uint16_t ras_service_uuid = CS_RAS_SERVICE_UUID;
+        sc = ble_peer_manager_set_filter_service_uuid16((sl_bt_uuid_16_t *)&ras_service_uuid);
+        app_assert_status(sc);
+
+    #ifndef SL_CATALOG_CS_INITIATOR_CLI_PRESENT
+        sc = ble_peer_manager_central_create_connection();
+        app_assert_status(sc);
+        cs_initiator_display_start_scanning();
+        // Start scanning for reflector connections
+        log_info(APP_PREFIX "Scanning started for reflector connections..." NL);
+    #else
+        log_info("CS CLI is active." NL);
+    #endif // SL_CATALOG_CS_INITIATOR_CLI_PRESENT
+      }
     }
+    break;
+
     case sl_bt_evt_connection_parameters_id:
+      if (ota_mode)
+        break;
       sc = get_instance_number(evt->data.evt_connection_parameters.connection, &instance_num);
       // Initiator instance not created yet
       if (sc != SL_STATUS_OK) {
@@ -1251,7 +1059,7 @@ void ble_peer_manager_on_event_initiator(ble_peer_manager_evt_type_t * event)
 
       /* Initialise reflector FSM state */
       sc = get_instance_number(event->connection_id, &instance_num);
-      reflector_state[instance_num] = JUST_CONNECTED;
+      init_measure(instance_num);
 
       check_cli_values();
       cs_initiator_display_set_measurement_mode(initiator_config.cs_main_mode, rtl_config.algo_mode);

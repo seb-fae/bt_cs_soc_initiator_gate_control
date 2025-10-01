@@ -62,11 +62,8 @@
 void trace_init(void)
 {
   app_log_iostream_set(iostream_bgapi_trace_handle);
-#if (ALWAYS_INIT_TRACE == 0)
-  if (!is_trace_requested()) {
-    return;
-  }
-#endif // (ALWAYS_INIT_TRACE == 0)
+  return;
+
   sli_bgapi_trace_start();
   rtl_log_init();
   led_on();

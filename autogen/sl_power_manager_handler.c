@@ -4,7 +4,6 @@
 #include "sl_sleeptimer.h"
 #include "app_timer_internal.h"
 #include "sl_bluetooth.h"
-#include "sl_iostream_init_eusart_instances.h"
 
 /***************************************************************************//**
  * Check if the MCU can sleep at that time. This function is called when the system
@@ -97,13 +96,6 @@ bool sl_power_manager_sleep_on_isr_exit(void)
   }
 
   answer = sli_bt_sleep_on_isr_exit();
-  if (answer == SL_POWER_MANAGER_WAKEUP) {
-    force_wakeup = true;
-  } else if (answer == SL_POWER_MANAGER_SLEEP) {
-    sleep = true;
-  }
-
-  answer = sl_iostream_eusart_vcom_sleep_on_isr_exit();
   if (answer == SL_POWER_MANAGER_WAKEUP) {
     force_wakeup = true;
   } else if (answer == SL_POWER_MANAGER_SLEEP) {

@@ -27,34 +27,38 @@ include:
   - {path: app.h}
   - {path: rtl_log.h}
   - {path: trace.h}
-sdk: {id: simplicity_sdk, version: 2025.6.0}
+sdk: {id: simplicity_sdk, version: 2025.6.1}
 toolchain_settings: []
 component:
-- {id: EFR32MG24B210F1536IM48}
+- {id: EFR32MG24A410F1536IM48}
 - {id: app_assert}
 - {id: app_log}
 - {id: ble_peer_manager_central}
 - {id: ble_peer_manager_common}
 - {id: ble_peer_manager_filter}
 - {id: bluetooth_controller_anchor_selection}
+- {id: bluetooth_feature_advertiser}
 - {id: bluetooth_feature_connection_role_central}
 - {id: bluetooth_feature_extended_scanner}
 - {id: bluetooth_feature_gap}
+- {id: bluetooth_feature_legacy_advertiser}
 - {id: bluetooth_feature_sm}
 - {id: bluetooth_feature_system}
 - {id: bluetooth_stack}
 - {id: bluetooth_utility_bgapi_trace}
-- {id: brd2606a}
 - {id: clock_manager}
 - {id: component_catalog}
+- {id: configuration_over_swo}
 - {id: cs_antenna}
 - {id: cs_initiator}
 - {id: cs_initiator_display}
 - {id: device_init}
 - {id: gatt_configuration}
+- {id: hal_prs}
 - {id: in_place_ota_dfu}
 - {id: iostream_bgapi_trace}
 - {id: iostream_recommended_stream}
+- {id: iostream_swo}
 - {id: mpu}
 - instance: [btn0, btn1]
   id: simple_button
@@ -81,7 +85,7 @@ configuration:
 - unless: [hardware_board]
   name: SL_CLOCK_MANAGER_HFXO_FREQ
   value: '40000000'
-- {name: SL_STACK_SIZE, value: '3500'}
+- {name: SL_STACK_SIZE, value: '3496'}
 - {name: SL_BT_CONFIG_BUFFER_SIZE, value: '22000'}
 - {name: SL_BT_CONFIG_MAX_CS_PROCEDURES, value: '4'}
 - condition: [psa_crypto]

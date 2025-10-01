@@ -1,6 +1,5 @@
 #include "sl_event_handler.h"
 
-#include "sl_board_init.h"
 #include "sl_clock_manager.h"
 #include "sl_hfxo_manager.h"
 #include "sl_rail_util_aox.h"
@@ -9,7 +8,6 @@
 #include "pa_conversions_efr32.h"
 #include "sl_rail_util_power_manager_init.h"
 #include "btl_interface.h"
-#include "sl_board_control.h"
 #include "app_log.h"
 #include "app_timer_internal.h"
 #include "ble_peer_manager_central.h"
@@ -19,8 +17,8 @@
 #include "cs_ras_client_internal.h"
 #include "sl_debug_swo.h"
 #include "sl_gpio.h"
-#include "sl_iostream_init_eusart_instances.h"
 #include "sl_iostream_stdlib_config.h"
+#include "sl_iostream_swo.h"
 #include "sl_mbedtls.h"
 #include "sl_simple_button_instances.h"
 #include "sl_simple_led_instances.h"
@@ -52,10 +50,8 @@ void sli_internal_permanent_allocation(void)
 
 void sl_platform_init(void)
 {
-  sl_board_preinit();
   sl_clock_manager_runtime_init();
   sl_hfxo_manager_init_hardware();
-  sl_board_init();
   bootloader_init();
   nvm3_initDefault();
 }
@@ -75,7 +71,6 @@ void sl_driver_init(void)
 
 void sl_service_init(void)
 {
-  sl_board_configure_vcom();
   sl_hfxo_manager_init();
   sl_iostream_stdlib_disable_buffering();
   sl_mbedtls_init();
@@ -127,7 +122,7 @@ void sli_internal_app_process_action(void)
 
 void sl_iostream_init_instances_stage_1(void)
 {
-  sl_iostream_eusart_init_instances();
+  sl_iostream_swo_init();
 }
 
 void sl_iostream_init_instances_stage_2(void)

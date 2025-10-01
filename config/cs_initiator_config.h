@@ -78,7 +78,7 @@
 // <i> If less than 4 initiator instances are created SL_BT_CONFIG_BUFFER_SIZE can be reduced.
 // <i> Default: 4
 #ifndef CS_INITIATOR_MAX_CONNECTIONS
-#define CS_INITIATOR_MAX_CONNECTIONS                  4
+#define CS_INITIATOR_MAX_CONNECTIONS                  (2)
 #endif
 
 // <o CS_INITIATOR_MAX_RANGING_DATA_SIZE> Maximum ranging data size <32..2500>
