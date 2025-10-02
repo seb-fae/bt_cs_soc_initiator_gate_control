@@ -52,17 +52,15 @@ volatile enum gate_state_e gate_state = DOOR_CLOSED;
 #define CLOSE_BLOCK_DELAY_MS 10000
 #define RELAY_DELAY_TIME_MS 500
 
-#define RELAY_0PEN_PORT  gpioPortC
-#define RELAY_0PEN_PIN   2
+#define RELAY_OPEN_PORT  gpioPortC
+#define RELAY_OPEN_PIN   2
 #define RELAY_CLOSE_PORT gpioPortC
 #define RELAY_CLOSE_PIN  3
-
-uint8_t volatile control_disable = 0;
 
 sl_status_t status;
 sl_sleeptimer_timer_handle_t my_timer;
 
-enum gate_command_state_e relay_state = RELAY_POSITION_0;
+volatile enum gate_command_state_e relay_state = RELAY_POSITION_0;
 
 void open_callback(sl_sleeptimer_timer_handle_t *handle, void *data)
 {
@@ -87,21 +85,21 @@ void relay_sequence(uint8_t open)
       /* Set LED ON */
       GPIO_PinModeSet(gpioPortD, 4, gpioModePushPull, 1);
       if (open)
-        GPIO_PinModeSet(RELAY_0PEN_PORT, RELAY_0PEN_PIN, gpioModePushPull, 0);
+        GPIO_PinModeSet(RELAY_OPEN_PORT, RELAY_OPEN_PIN, gpioModePushPull, 0);
       else
         GPIO_PinModeSet(RELAY_CLOSE_PORT, RELAY_CLOSE_PIN, gpioModePushPull, 0);
       relay_state = RELAY_POSITION_1;
       break;
     case RELAY_POSITION_1:
       if (open)
-        GPIO_PinModeSet(RELAY_0PEN_PORT, RELAY_0PEN_PIN, gpioModePushPull, 1);
+        GPIO_PinModeSet(RELAY_OPEN_PORT, RELAY_OPEN_PIN, gpioModePushPull, 1);
       else
         GPIO_PinModeSet(RELAY_CLOSE_PORT, RELAY_CLOSE_PIN, gpioModePushPull, 1);
       relay_state = RELAY_POSITION_2;
       break;
     case RELAY_POSITION_2:
       if (open)
-        GPIO_PinModeSet(RELAY_0PEN_PORT, RELAY_0PEN_PIN, gpioModePushPull, 0);
+        GPIO_PinModeSet(RELAY_OPEN_PORT, RELAY_OPEN_PIN, gpioModePushPull, 0);
       else
         GPIO_PinModeSet(RELAY_CLOSE_PORT, RELAY_CLOSE_PIN, gpioModePushPull, 0);
       relay_state = RELAY_DELAY;
@@ -164,7 +162,7 @@ void try_close_gate()
   switch (gate_state)
   {
     case DOOR_CLOSED:
-     /* Door already opened, nothing to do */
+     /* Door already closed, nothing to do */
       return;
     default:
       break;
