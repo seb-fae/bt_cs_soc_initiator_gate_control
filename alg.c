@@ -23,8 +23,6 @@ enum reflector_state_e
 {
     JUST_CONNECTED,
     MOVING,
-    MOVING_AWAY,
-    MOVING_CLOSER,
     RED_ZONE,
 };
 
@@ -253,72 +251,6 @@ void process_measure(uint8_t index, cs_initiator_instances_t * instances)
     default:
       break;
   }
-
-}
-
-int32_t diff = 0;
-
-void process_measure_old(uint8_t index, cs_initiator_instances_t * instances)
-{
-  cs_initiator_instances_t * initiator = instances + index;
-  uint32_t distance = (uint32_t)(initiator->measurement_mainmode.distance_filtered * 1000.f);
-
-  switch (reflector_state[index])
-  {
-    case JUST_CONNECTED:
-      diff = 0;
-      previous[index] = distance;
-      break;
-    default:
-      distance = (distance * DISTANCE_WEIGHT) + (previous[index] * (100 - DISTANCE_WEIGHT));
-      distance /= 100;
-
-      diff += (previous[index] - distance);
-      break;
-  }
-
-
-  if (++cnt % 192 == 0)
-   printf("diff: %d\nd: %d\nb: %d\n\n", diff, distance, previous[index]);
-  //  printf("d: %d, b: %d\n", distance, baseline[index]);
- // printf("s: %d \n", reflector_state[index]);
-
-  switch (reflector_state[index])
-  {
-    case JUST_CONNECTED:
-      reflector_state[index] = MOVING;
-      break;
-    case MOVING:
-      if (distance <= DISTANCE_RED_ZONE)
-      {
-        reflector_state[index] = RED_ZONE;
-        break;
-      }
-      //printf("d: %d, b: %d\n", distance, baseline[index]);
-      /* This state is used to determine direction of mouvement */
-      if ((diff > 0) && (diff >= MOVING_THRESHOLD))
-      /* We are moving closer */
-      {
-        diff = 0;
-        try_open_gate(distance);
-      }
-      if ((diff < 0) && (abs(diff) >= MOVING_THRESHOLD))
-      /* We are moving away */
-      {
-        diff = 0;
-        try_close_gate();
-      }
-      break;
-    case RED_ZONE:
-      if (distance > DISTANCE_RED_ZONE)
-        reflector_state[index] = MOVING;
-      break;
-    default:
-      break;
-  }
-
-  previous[index] = distance;
-
 
 }
 
