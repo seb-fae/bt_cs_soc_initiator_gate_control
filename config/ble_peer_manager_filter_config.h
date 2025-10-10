@@ -40,7 +40,7 @@
 // <q BLE_PEER_MANAGER_FILTER_LOG> Log
 // <i> Should the module log or not.
 // <i> Default: 0
-#define BLE_PEER_MANAGER_FILTER_LOG                          0
+#define BLE_PEER_MANAGER_FILTER_LOG                          1
 
 // <<< end of configuration section >>>
 

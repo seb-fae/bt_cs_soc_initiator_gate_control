@@ -126,7 +126,7 @@
 // <i> This allows connections to overrun lower priority tasks as long as there is data to transmit or receive on the connection,
 // and the maximum connection event length is not reached.
 #ifndef SL_BT_CONTROLLER_CONN_EVENT_LENGTH_EXTENSION
-#define SL_BT_CONTROLLER_CONN_EVENT_LENGTH_EXTENSION (0)
+#define SL_BT_CONTROLLER_CONN_EVENT_LENGTH_EXTENSION 1
 #endif
 // </h> Bluetooth Controller Configuration for LE Connection
 
@@ -134,6 +134,26 @@
 // <i> Default: 0
 #ifndef SL_BT_CONTROLLER_USE_LEGACY_VENDOR_SPECIFIC_EVENT_CODE
 #define SL_BT_CONTROLLER_USE_LEGACY_VENDOR_SPECIFIC_EVENT_CODE     (0)
+#endif
+
+// <o SL_BT_CONTROLLER_ADAPTIVITY_MODE> Adaptive Frequency Hopping operation mode
+//   <SL_BTCTRL_CHANNELMAP_FLAG_ACTIVE_ADAPTIVITY=> Active AFH
+//   <SL_BTCTRL_CHANNELMAP_FLAG_PASSIVE_ADAPTIVITY=> Passive AFH
+// <i> Choose between active AFH and passive AFH
+// <i> Default: Active AFH
+// <d> SL_BTCTRL_CHANNELMAP_FLAG_ACTIVE_ADAPTIVITY
+#ifndef SL_BT_CONTROLLER_ADAPTIVITY_MODE
+#define SL_BT_CONTROLLER_ADAPTIVITY_MODE     (SL_BTCTRL_CHANNELMAP_FLAG_ACTIVE_ADAPTIVITY)
+#endif
+
+// <o SL_BT_CONTROLLER_PA_CONFIG> Power Amplifier (PA) Configuration
+// <SL_BT_BLUETOOTH_PA_AUTOMODE=> Automode PA configuration
+// <SL_BT_BLUETOOTH_HIGHEST_PA=> Highest available PA configuration
+// <SL_BT_BLUETOOTH_RAIL_UTIL_PA=> RAIL Utility component PA configuration
+// <i> Select the Power Amplifier configuration
+// <i> Default: RAIL Utility component PA configuration
+#ifndef SL_BT_CONTROLLER_PA_CONFIG
+#define SL_BT_CONTROLLER_PA_CONFIG     SL_BT_BLUETOOTH_RAIL_UTIL_PA
 #endif
 // </h> Bluetooth Controller Configuration
 

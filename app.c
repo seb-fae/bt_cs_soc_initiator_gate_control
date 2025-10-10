@@ -43,9 +43,14 @@
 #include "app_config.h"
 #include "app_timer.h"
 
-#include "em_gpio.h"
-
-
+// initiator content
+#include "cs_antenna.h"
+#include "cs_result.h"
+#include "cs_initiator.h"
+#include "cs_initiator_client.h"
+#include "cs_initiator_config.h"
+#include "cs_initiator_display_core.h"
+#include "cs_initiator_display.h"
 
 // RAS
 #include "cs_ras_client.h"
@@ -76,6 +81,8 @@
 #define BT_ADDR_LEN                      sizeof(bd_addr)
 #define DISPLAY_REFRESH_RATE             1000u // ms
 #define ABS(x)                           ((x < 0) ? ((-1) * x) : x)
+
+
 
 // -----------------------------------------------------------------------------
 // Static function declarations
@@ -117,6 +124,7 @@ static app_timer_t display_timer;
 void app_init(void)
 {
   sl_status_t sc = SL_STATUS_OK;
+
   trace_init();
 
   // initialize initiator instances
@@ -197,21 +205,16 @@ void app_init(void)
   /////////////////////////////////////////////////////////////////////////////
 }
 
-
-
-
-
-
-
-
 /******************************************************************************
  * Application Process Action
  *****************************************************************************/
 void app_process_action(void)
 {
+
   for (uint8_t i = 0u; i < CS_INITIATOR_MAX_CONNECTIONS; i++) {
     if (cs_initiator_instances[i].measurement_arrived) {
       process_measure(i, cs_initiator_instances + i);
+
 
       // write results to the display & to the iostream
       cs_initiator_instances[i].measurement_arrived = false;
@@ -608,6 +611,7 @@ static void check_cli_values(void)
   initiator_config.cs_sync_antenna_req = cs_initiator_cli_get_cs_sync_antenna_usage();
   initiator_config.cs_main_mode = cs_initiator_cli_get_mode();
   initiator_config.conn_phy = cs_initiator_cli_get_conn_phy();
+  initiator_config.max_procedure_count = cs_initiator_cli_get_procedure_counter();
   rtl_config.algo_mode = cs_initiator_cli_get_algo_mode();
   initiator_config.channel_map_preset = cs_initiator_cli_get_preset();
   cs_initiator_apply_channel_map_preset(initiator_config.channel_map_preset,
@@ -638,9 +642,15 @@ static sl_status_t create_new_initiator_instance(uint8_t conn_handle)
       memset(&cs_initiator_instances[i].measurement_submode, 0u, sizeof(cs_measurement_data_t));
       memset(&cs_initiator_instances[i].measurement_progress, 0u, sizeof(measurement_progress));
       num_reflector_connections++;
+
+      /* Initialise reflector FSM state */
+      log_info(APP_INSTANCE_PREFIX "Init measure" " %d" NL, i);
+      init_measure(i);
+
       break;
     }
   }
+
 
   sc = cs_initiator_create(conn_handle,
                            &initiator_config,
@@ -776,6 +786,90 @@ static uint8_t advertising_set_handle = 0xff;
 #include "gatt_db.h"
 
 volatile uint8_t ota_mode = 0;
+
+void init_ota_adv()
+{
+  sl_status_t sc;
+  bd_addr address;
+  uint8_t address_type;
+  uint8_t system_id[8];
+
+  // Extract unique ID from BT Address.
+   sc = sl_bt_system_get_identity_address(&address, &address_type);
+   app_assert(sc == SL_STATUS_OK,
+                 "[E: 0x%04x] Failed to get Bluetooth address\n",
+                 (int)sc);
+
+   // Pad and reverse unique ID to get System ID.
+   system_id[0] = address.addr[5];
+   system_id[1] = address.addr[4];
+   system_id[2] = address.addr[3];
+   system_id[3] = 0xFF;
+   system_id[4] = 0xFE;
+   system_id[5] = address.addr[2];
+   system_id[6] = address.addr[1];
+   system_id[7] = address.addr[0];
+
+   sc = sl_bt_gatt_server_write_attribute_value(gattdb_system_id,
+                                                0,
+                                                sizeof(system_id),
+                                                system_id);
+   app_assert(sc == SL_STATUS_OK,
+                 "[E: 0x%04x] Failed to write attribute\n",
+                 (int)sc);
+
+   // Create an advertising set.
+   sc = sl_bt_advertiser_create_set(&advertising_set_handle);
+   app_assert(sc == SL_STATUS_OK,
+                 "[E: 0x%04x] Failed to create advertising set\n",
+                 (int)sc);
+
+   // Set advertising interval to 100ms.
+   sc = sl_bt_advertiser_set_timing(
+     advertising_set_handle,
+     160 * 5, // min. adv. interval (milliseconds * 1.6)
+     160 * 5, // max. adv. interval (milliseconds * 1.6)
+     0,   // adv. duration
+     0);  // max. num. adv. events
+   app_assert(sc == SL_STATUS_OK,
+                 "[E: 0x%04x] Failed to set advertising timing\n",
+                 (int)sc);
+
+   // Start general advertising and enable connections.
+   sc = sl_bt_legacy_advertiser_generate_data(advertising_set_handle,
+                                              sl_bt_advertiser_general_discoverable);
+   app_assert(sc == SL_STATUS_OK,
+                 "[E: 0x%04x] Failed to generate data\n",
+                 (int)sc);
+
+   ota_adv(true);
+}
+
+void ota_adv(bool start)
+{
+  sl_status_t sc;
+
+ if (!start)
+ {
+   if (!ota_mode)
+     return;
+
+   ota_mode = 0;
+   sl_bt_advertiser_stop(advertising_set_handle);
+   log_info(APP_PREFIX "Stopping Advertising..." NL);
+   return;
+ }
+
+ ota_mode = 1;
+ sc = sl_bt_legacy_advertiser_start(advertising_set_handle,
+                                    sl_bt_legacy_advertiser_connectable);
+ app_assert(sc == SL_STATUS_OK,
+               "[E: 0x%04x] Failed to start advertising\n",
+               (int)sc);
+
+ log_info(APP_PREFIX "Starting Advertising..." NL);
+}
+
 /**************************************************************************//**
  * Bluetooth stack event handler
  *
@@ -786,9 +880,6 @@ void sl_bt_on_event(sl_bt_msg_t * evt)
   sl_status_t sc;
   uint8_t instance_num;
   const char* device_name = REFLECTOR_DEVICE_NAME;
-  bd_addr address;
-  uint8_t address_type;
-  uint8_t system_id[8];
 
   switch (SL_BT_MSG_ID(evt->header)) {
     // -------------------------------
@@ -807,118 +898,60 @@ void sl_bt_on_event(sl_bt_msg_t * evt)
       log_info(APP_PREFIX "Minimum system TX power is set to: %d dBm" NL, min_tx_power_x10 / 10);
       log_info(APP_PREFIX "Maximum system TX power is set to: %d dBm" NL, max_tx_power_x10 / 10);
 
-      uint8_t button_state = GPIO_PinInGet(SL_SIMPLE_BUTTON_BTN0_PORT, SL_SIMPLE_BUTTON_BTN0_PIN);
+      // Reset to initial state
+      ble_peer_manager_central_init();
+      ble_peer_manager_filter_init();
+      cs_initiator_init();
 
-      if (button_state == 0)
-      /* Button pressed */
-      {
-        ota_mode = 1;
-        /* Set LED ON */
-        GPIO_PinModeSet(gpioPortD, 4, gpioModePushPull, 1);
-        // Extract unique ID from BT Address.
-         sc = sl_bt_system_get_identity_address(&address, &address_type);
-         app_assert(sc == SL_STATUS_OK,
-                       "[E: 0x%04x] Failed to get Bluetooth address\n",
-                       (int)sc);
+      // Print the Bluetooth address
+      bd_addr address;
+      uint8_t address_type;
+      sc = sl_bt_gap_get_identity_address(&address, &address_type);
+      app_assert_status(sc);
+      log_info(APP_PREFIX "Bluetooth %s address: %02X:%02X:%02X:%02X:%02X:%02X\n",
+               address_type ? "static random" : "public device",
+               address.addr[5],
+               address.addr[4],
+               address.addr[3],
+               address.addr[2],
+               address.addr[1],
+               address.addr[0]);
 
-         // Pad and reverse unique ID to get System ID.
-         system_id[0] = address.addr[5];
-         system_id[1] = address.addr[4];
-         system_id[2] = address.addr[3];
-         system_id[3] = 0xFF;
-         system_id[4] = 0xFE;
-         system_id[5] = address.addr[2];
-         system_id[6] = address.addr[1];
-         system_id[7] = address.addr[0];
+      sc = cs_antenna_configure(CS_INITIATOR_ANTENNA_OFFSET);
+      app_assert_status(sc);
 
-         sc = sl_bt_gatt_server_write_attribute_value(gattdb_system_id,
-                                                      0,
-                                                      sizeof(system_id),
-                                                      system_id);
-         app_assert(sc == SL_STATUS_OK,
-                       "[E: 0x%04x] Failed to write attribute\n",
-                       (int)sc);
+      // Filter for advertised name (CS_RFLCT)
+      sc = ble_peer_manager_set_filter_device_name(device_name,
+                                                   strlen(device_name),
+                                                   false);
+      app_assert_status(sc);
 
-         // Create an advertising set.
-         sc = sl_bt_advertiser_create_set(&advertising_set_handle);
-         app_assert(sc == SL_STATUS_OK,
-                       "[E: 0x%04x] Failed to create advertising set\n",
-                       (int)sc);
+      uint16_t ras_service_uuid = CS_RAS_SERVICE_UUID;
+      sc = ble_peer_manager_set_filter_service_uuid16((sl_bt_uuid_16_t *)&ras_service_uuid);
+      app_assert_status(sc);
 
-         // Set advertising interval to 100ms.
-         sc = sl_bt_advertiser_set_timing(
-           advertising_set_handle,
-           160, // min. adv. interval (milliseconds * 1.6)
-           160, // max. adv. interval (milliseconds * 1.6)
-           0,   // adv. duration
-           0);  // max. num. adv. events
-         app_assert(sc == SL_STATUS_OK,
-                       "[E: 0x%04x] Failed to set advertising timing\n",
-                       (int)sc);
-         // Start general advertising and enable connections.
-         sc = sl_bt_legacy_advertiser_generate_data(advertising_set_handle,
-                                                    sl_bt_advertiser_general_discoverable);
-         app_assert(sc == SL_STATUS_OK,
-                       "[E: 0x%04x] Failed to generate data\n",
-                       (int)sc);
-         sc = sl_bt_legacy_advertiser_start(advertising_set_handle,
-                                            sl_bt_legacy_advertiser_connectable);
-         app_assert(sc == SL_STATUS_OK,
-                       "[E: 0x%04x] Failed to start advertising\n",
-                       (int)sc);
+#ifndef SL_CATALOG_CS_INITIATOR_CLI_PRESENT
+      sc = ble_peer_manager_central_create_connection();
+      app_assert_status(sc);
+      cs_initiator_display_start_scanning();
+      // Start scanning for reflector connections
+      log_info(APP_PREFIX "Scanning started for reflector connections..." NL);
+#else
+      log_info("CS CLI is active." NL);
+#endif // SL_CATALOG_CS_INITIATOR_CLI_PRESENT
 
-         log_info(APP_PREFIX "Starting Advertising..." NL);
-      }
-      else
-      {
-        // Reset to initial state
-        ble_peer_manager_central_init();
-        ble_peer_manager_filter_init();
-        cs_initiator_init();
-
-        // Print the Bluetooth address
-        bd_addr address;
-        uint8_t address_type;
-        sc = sl_bt_gap_get_identity_address(&address, &address_type);
-        app_assert_status(sc);
-        log_info(APP_PREFIX "Bluetooth %s address: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                 address_type ? "static random" : "public device",
-                 address.addr[5],
-                 address.addr[4],
-                 address.addr[3],
-                 address.addr[2],
-                 address.addr[1],
-                 address.addr[0]);
-
-        sc = cs_antenna_configure(CS_INITIATOR_ANTENNA_OFFSET);
-        app_assert_status(sc);
-
-        // Filter for advertised name (CS_RFLCT)
-        sc = ble_peer_manager_set_filter_device_name(device_name,
-                                                     strlen(device_name),
-                                                     false);
-        app_assert_status(sc);
-
-        uint16_t ras_service_uuid = CS_RAS_SERVICE_UUID;
-        sc = ble_peer_manager_set_filter_service_uuid16((sl_bt_uuid_16_t *)&ras_service_uuid);
-        app_assert_status(sc);
-
-    #ifndef SL_CATALOG_CS_INITIATOR_CLI_PRESENT
-        sc = ble_peer_manager_central_create_connection();
-        app_assert_status(sc);
-        cs_initiator_display_start_scanning();
-        // Start scanning for reflector connections
-        log_info(APP_PREFIX "Scanning started for reflector connections..." NL);
-    #else
-        log_info("CS CLI is active." NL);
-    #endif // SL_CATALOG_CS_INITIATOR_CLI_PRESENT
-      }
+      init_ota_adv();
+      break;
     }
-    break;
+
+    case sl_bt_evt_connection_closed_id:
+      //Start OTA advertising
+      ota_adv(true);
+      break;
+
+
 
     case sl_bt_evt_connection_parameters_id:
-      if (ota_mode)
-        break;
       sc = get_instance_number(evt->data.evt_connection_parameters.connection, &instance_num);
       // Initiator instance not created yet
       if (sc != SL_STATUS_OK) {
@@ -927,7 +960,7 @@ void sl_bt_on_event(sl_bt_msg_t * evt)
           app_assert_status(sc);
         } else {
           sc = sl_bt_sm_increase_security(evt->data.evt_connection_parameters.connection);
-          app_assert_status(sc);
+          //app_assert_status(sc);
         }
       }
       break;
@@ -1046,20 +1079,18 @@ void ble_peer_manager_on_event_initiator(ble_peer_manager_evt_type_t * event)
 
   switch (event->evt_id) {
     case BLE_PEER_MANAGER_ON_CONN_OPENED_CENTRAL:
+      /* Stop OTA advertising */
+      ota_adv(false);
+
       address = ble_peer_manager_get_bt_address(event->connection_id);
       log_info(APP_INSTANCE_PREFIX "Connection opened as central with CS Reflector"
                                    " '%02X:%02X:%02X:%02X:%02X:%02X'" NL,
-               event->connection_id,
                address->addr[5],
                address->addr[4],
                address->addr[3],
                address->addr[2],
                address->addr[1],
                address->addr[0]);
-
-      /* Initialise reflector FSM state */
-      sc = get_instance_number(event->connection_id, &instance_num);
-      init_measure(instance_num);
 
       check_cli_values();
       cs_initiator_display_set_measurement_mode(initiator_config.cs_main_mode, rtl_config.algo_mode);

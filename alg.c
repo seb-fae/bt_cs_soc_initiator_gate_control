@@ -216,7 +216,7 @@ void process_measure(uint8_t index, cs_initiator_instances_t * instances)
   }
 
   // printf("diff: %d\nd: %d\nb: %d\n", distance - baseline[index], new, baseline[index]);
-  // printf("d: %d, b: %d\n", distance, baseline[index]);
+   printf("d: %d, b: %d\n", distance, baseline[index]);
   // printf("s: %d \n", reflector_state[index]);
 
   switch (reflector_state[index])

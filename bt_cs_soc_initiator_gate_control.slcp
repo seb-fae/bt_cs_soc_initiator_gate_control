@@ -2,7 +2,7 @@
 project_name: bt_cs_soc_initiator_gate_control
 label: bt_cs_soc_initiator_gate_control
 description: |
-  Channel Sounding (CS) Initiator for Bluetooth LE. This example connects to a CS Reflector device and starts the distance measurement. Results are printed on the display of the main board if available and can be read via the serial port VCOM. It can measure in two CS measurement main modes PBR (default) and RTT. RTT mode can be selected by setting the `CS_INITIATOR_DEFAULT_CS_MODE` macro to `sl_bt_cs_mode_rtt`. Submode can also be used by setting the  `CS_INITIATOR_DEFAULT_CS_SUB_MODE` to RTT. Submode is disabled by default. The initiator can measure in two object tracking modes: in moving object tracking mode (default) or in stationary object tracking mode. In moving object tracking mode measurement results will be calculated for every procedure. Moving object tracking has two different modes based on filtering and CPU cost: real-time basic and real-time fast. In stationary object tracking mode multiple CS procedure data is required for the estimation process. The progress of the estimation will be shown on the LCD and in the logs in percentages. Once the estimation process is done the measurement results will be shown similarly like in the moving object tracking mode. The push button BTN1 will change the default object tracking mode real-time fast to stationary object tracking mode. Default values can be found and modified in the component configuration file (config/cs_initiator_config.h). The actual mode can be checked on the serial output and in the captured logs.
+  Channel Sounding (CS) Initiator for Bluetooth LE. This example connects to a CS Reflector device and starts the distance measurement. Results are printed on the display of the main board if available and can be read via the serial port VCOM. It can measure in two CS measurement main modes PBR (default) and RTT. RTT mode can be selected by setting the `CS_INITIATOR_DEFAULT_CS_MODE` macro to `sl_bt_cs_mode_rtt`. Submode can also be used by setting the `CS_INITIATOR_DEFAULT_CS_SUB_MODE` to RTT. Submode is disabled by default. The initiator can measure in two object tracking modes: in moving object tracking mode (default) or in stationary object tracking mode. In moving object tracking mode measurement results will be calculated for every procedure. Moving object tracking has two different modes based on filtering and CPU cost: real-time basic and real-time fast. In stationary object tracking mode multiple CS procedure data is required for the estimation process. The progress of the estimation will be shown on the LCD and in the logs in percentages. Once the estimation process is done the measurement results will be shown similarly like in the moving object tracking mode. The push button BTN1 will change the default object tracking mode real-time fast to stationary object tracking mode. Default values can be found and modified in the component configuration file (config/cs_initiator_config.h). The actual mode can be checked on the serial output and in the captured logs.
 category: Bluetooth Examples
 filter:
 - name: Device Type
@@ -27,7 +27,7 @@ include:
   - {path: app.h}
   - {path: rtl_log.h}
   - {path: trace.h}
-sdk: {id: simplicity_sdk, version: 2025.6.1}
+sdk: {id: simplicity_sdk, version: 2025.6.2}
 toolchain_settings: []
 component:
 - {id: EFR32MG24A410F1536IM48}
@@ -37,7 +37,6 @@ component:
 - {id: ble_peer_manager_common}
 - {id: ble_peer_manager_filter}
 - {id: bluetooth_controller_anchor_selection}
-- {id: bluetooth_feature_advertiser}
 - {id: bluetooth_feature_connection_role_central}
 - {id: bluetooth_feature_extended_scanner}
 - {id: bluetooth_feature_gap}
@@ -85,9 +84,11 @@ configuration:
 - unless: [hardware_board]
   name: SL_CLOCK_MANAGER_HFXO_FREQ
   value: '40000000'
+- {name: SL_CLOCK_MANAGER_PCLK_DIVIDER, value: CMU_SYSCLKCTRL_PCLKPRESC_DIV2}
 - {name: SL_STACK_SIZE, value: '3496'}
 - {name: SL_BT_CONFIG_BUFFER_SIZE, value: '22000'}
 - {name: SL_BT_CONFIG_MAX_CS_PROCEDURES, value: '4'}
+- {name: SL_BT_CONTROLLER_CONN_EVENT_LENGTH_EXTENSION, value: '1'}
 - condition: [psa_crypto]
   name: SL_PSA_KEY_USER_SLOT_COUNT
   value: '0'

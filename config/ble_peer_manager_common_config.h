@@ -41,7 +41,7 @@
 // <i> Should the module log or not.
 // <i> Default: 0
 #ifndef BLE_PEER_MANAGER_COMMON_LOG
-#define BLE_PEER_MANAGER_COMMON_LOG                          0
+#define BLE_PEER_MANAGER_COMMON_LOG                          1
 #endif
 
 // <s BLE_PEER_MANAGER_COMMON_LOG_PREFIX> Log prefix
