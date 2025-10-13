@@ -9,6 +9,7 @@
 #include "em_gpio.h"
 #include "sl_sleeptimer.h"
 #include "app.h"
+#include "config/token.h"
 
 #define OPEN_CMD 1
 #define CLOSE_CMD 0
@@ -41,15 +42,15 @@ volatile enum gate_state_e gate_state = DOOR_CLOSED;
 
 //#define GATE_AUTO_CLOSE_MODE
 
-#define BASELINE_WEIGHT 100
+//Baseline range is 1 - 99
+uint32_t BASELINE_WEIGHT = 10;
+uint32_t MOVING_THRESHOLD = 1000;
+uint32_t OPEN_BLOCK_DELAY_MS = 8000;
+uint32_t CLOSE_BLOCK_DELAY_MS = 10000;
+
 #define DISTANCE_WEIGHT 500
-
 #define DISTANCE_RED_ZONE 2000
-#define DISTANCE_OPENING_ZONE 40000
-#define MOVING_THRESHOLD 1000
-
-#define OPENNING_BLOCK_DELAY_MS 8000
-#define CLOSE_BLOCK_DELAY_MS 10000
+#define DISTANCE_OPENING_ZONE 100000
 #define RELAY_DELAY_TIME_MS 500
 
 #define RELAY_OPEN_PORT  gpioPortC
@@ -59,6 +60,7 @@ volatile enum gate_state_e gate_state = DOOR_CLOSED;
 
 sl_status_t status;
 sl_sleeptimer_timer_handle_t my_timer;
+uint8_t led_lock = 0;
 
 volatile enum gate_command_state_e relay_state = RELAY_POSITION_0;
 
@@ -78,10 +80,14 @@ void relay_sequence(uint8_t open)
   /* relay sequence */
   printf("rs : %d\n", relay_state);
   uint32_t relay_delay = (RELAY_DELAY_TIME_MS * 32768)/1000;
+  CORE_irqState_t irqState;
 
   switch (relay_state)
   {
     case RELAY_POSITION_0:
+      irqState = CORE_EnterAtomic();
+      led_lock = 1;
+      CORE_ExitAtomic(irqState);
       /* Set LED ON */
       GPIO_PinModeSet(gpioPortD, 4, gpioModePushPull, 1);
       if (open)
@@ -103,12 +109,15 @@ void relay_sequence(uint8_t open)
       else
         GPIO_PinModeSet(RELAY_CLOSE_PORT, RELAY_CLOSE_PIN, gpioModePushPull, 0);
       relay_state = RELAY_DELAY;
-      /* After Opening/Closing the door we wait 5/30 seconds before new action */
-      relay_delay = open ? (OPENNING_BLOCK_DELAY_MS * 32768)/1000 : (CLOSE_BLOCK_DELAY_MS * 32768)/1000;
+      /* After Opening/Closing the door we wait before new action */
+      relay_delay = open ? (OPEN_BLOCK_DELAY_MS * 32768)/1000 : (CLOSE_BLOCK_DELAY_MS * 32768)/1000;
       break;
     case RELAY_DELAY:
       /* Set LED OFF */
       GPIO_PinModeSet(gpioPortD, 4, gpioModePushPull, 0);
+      irqState = CORE_EnterAtomic();
+      led_lock = 0;
+      CORE_ExitAtomic(irqState);
       relay_state = RELAY_POSITION_0;
       return;
   }
@@ -206,8 +215,8 @@ void process_measure(uint8_t index, cs_initiator_instances_t * instances)
       break;
     default:
       /* Update the baseline */
-      baseline[index] = (new * BASELINE_WEIGHT) + (baseline[index] * (1000 - BASELINE_WEIGHT));
-      baseline[index] /= 1000;
+      baseline[index] = (new * BASELINE_WEIGHT) + (baseline[index] * (100 - BASELINE_WEIGHT));
+      baseline[index] /= 100;
 
       distance = (new + previous[index])/2;
 
@@ -252,3 +261,59 @@ void process_measure(uint8_t index, cs_initiator_instances_t * instances)
 
 }
 
+void alg_init()
+{
+  uint8_t data;
+  sl_status_t st;
+
+  st = nvm3_readData(nvm3_defaultHandle, NVM3KEY_DEVICE_MOVING_THRESHOLD, &data, 1);
+
+  if (st == SL_STATUS_NOT_FOUND)
+  {
+    data = CREATOR_DEVICE_MOVING_THRESHOLD_DEFAULT;
+    nvm3_writeData(nvm3_defaultHandle, NVM3KEY_DEVICE_MOVING_THRESHOLD, &data, 1);
+  }
+
+  /* data is in deci-meter, convert to mm */
+  MOVING_THRESHOLD = data * 10 * 10;
+
+  /*-------------------------------------------------------------------------*/
+
+  st = nvm3_readData(nvm3_defaultHandle, NVM3KEY_DEVICE_BASELINE_WEIGHT, &data, 1);
+
+  if (st == SL_STATUS_NOT_FOUND)
+  {
+    data = CREATOR_DEVICE_BASELINE_WEIGHT_DEFAULT;
+    nvm3_writeData(nvm3_defaultHandle, NVM3KEY_DEVICE_BASELINE_WEIGHT, &data, 1);
+  }
+
+  /* value range is 1 -99 */
+  BASELINE_WEIGHT = data;
+
+  /*-------------------------------------------------------------------------*/
+
+  st = nvm3_readData(nvm3_defaultHandle, NVM3KEY_DEVICE_OPEN_TIME, &data, 1);
+
+  if (st == SL_STATUS_NOT_FOUND)
+  {
+    data = CREATOR_DEVICE_OPEN_TIME_DEFAULT;
+    nvm3_writeData(nvm3_defaultHandle, NVM3KEY_DEVICE_OPEN_TIME, &data, 1);
+  }
+
+  /* value is in s */
+  OPEN_BLOCK_DELAY_MS = data * 1000;
+
+  /*-------------------------------------------------------------------------*/
+
+  st = nvm3_readData(nvm3_defaultHandle, NVM3KEY_DEVICE_CLOSE_TIME, &data, 1);
+
+  if (st == SL_STATUS_NOT_FOUND)
+  {
+    data = CREATOR_DEVICE_CLOSE_TIME_DEFAULT;
+    nvm3_writeData(nvm3_defaultHandle, NVM3KEY_DEVICE_CLOSE_TIME, &data, 1);
+  }
+
+  /* value is in s */
+  CLOSE_BLOCK_DELAY_MS = data * 1000;
+
+}

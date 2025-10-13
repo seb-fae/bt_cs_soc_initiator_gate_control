@@ -47,4 +47,44 @@
       </properties>
     </characteristic>
   </service>
+
+  <!--Gate configuration-->
+  <service advertise="false" name="Gate configuration" requirement="mandatory" sourceId="" type="primary" uuid="3139158f-afe8-4a8d-a89a-d8f8a10db94f">
+
+    <!--Baseline Weight-->
+    <characteristic const="false" id="BASELINE" name="Baseline Weight" sourceId="" uuid="3763e0bd-1fc3-4092-aaa2-0c5073d80fdf">
+      <value length="0" type="user" variable_length="false">00</value>
+      <properties>
+        <read authenticated="false" bonded="false" encrypted="false"/>
+        <write authenticated="false" bonded="false" encrypted="false"/>
+      </properties>
+    </characteristic>
+
+    <!--Open Inactive Time Second-->
+    <characteristic const="false" id="OPEN_TIME" name="Open Inactive Time Second" sourceId="" uuid="52f6ea68-b0cd-4a7d-a5c5-879b1a8fb518">
+      <value length="0" type="user" variable_length="true">00</value>
+      <properties>
+        <read authenticated="false" bonded="false" encrypted="false"/>
+        <write authenticated="false" bonded="false" encrypted="false"/>
+      </properties>
+    </characteristic>
+
+    <!--Close Inactive Time Second-->
+    <characteristic const="false" id="CLOSE_TIME" name="Close Inactive Time Second" sourceId="" uuid="385c1868-276c-45b4-90e1-d6a6d00480b2">
+      <value length="0" type="user" variable_length="false">00</value>
+      <properties>
+        <read authenticated="false" bonded="false" encrypted="false"/>
+        <write authenticated="false" bonded="false" encrypted="false"/>
+      </properties>
+    </characteristic>
+
+    <!--Moving Threshold Dm-->
+    <characteristic const="false" id="MOVING_THRESHOLD" name="Moving Threshold Dm" sourceId="" uuid="7cddb4ef-5c8d-416e-b850-744470e049b0">
+      <value length="0" type="user" variable_length="false">00</value>
+      <properties>
+        <read authenticated="false" bonded="false" encrypted="false"/>
+        <write authenticated="false" bonded="false" encrypted="false"/>
+      </properties>
+    </characteristic>
+  </service>
 </gatt>

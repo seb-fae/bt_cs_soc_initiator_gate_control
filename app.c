@@ -55,6 +55,9 @@
 // RAS
 #include "cs_ras_client.h"
 
+#include "em_burtc.h"
+#include "em_cmu.h"
+
 // other required content
 #include "ble_peer_manager_common.h"
 #include "ble_peer_manager_connections.h"
@@ -117,6 +120,54 @@ static rtl_config_t rtl_config = RTL_CONFIG_DEFAULT;
 static uint8_t num_reflector_connections = 0u;
 static cs_initiator_instances_t cs_initiator_instances[CS_INITIATOR_MAX_CONNECTIONS];
 static app_timer_t display_timer;
+
+#define BURTC_LONG_PERIOD_MS  10000
+#define BURTC_SHORT_PERIOD_MS 50
+uint32_t v = BURTC_LONG_PERIOD_MS;
+extern uint8_t led_lock;
+
+void BURTC_IRQHandler(void)
+{
+  BURTC_IntClear(BURTC_IF_COMP); // compare match
+
+  if (led_lock)
+    return;
+
+  if (v == BURTC_SHORT_PERIOD_MS)
+  {
+    /* Set LED OFF */
+    GPIO_PinOutClear(gpioPortD, 4);
+    v = BURTC_LONG_PERIOD_MS;
+  }
+  else
+  {
+    /* Set LED ON */
+    GPIO_PinOutSet(gpioPortD, 4);
+    v = BURTC_SHORT_PERIOD_MS;
+  }
+
+  BURTC_CompareSet(0, v);
+  BURTC_CounterReset();
+}
+
+void initBURTC(void)
+{
+  CMU_ClockSelectSet(cmuClock_EM4GRPACLK, cmuSelect_ULFRCO);
+  CMU_ClockEnable(cmuClock_BURTC, true);
+
+  BURTC_Init_TypeDef burtcInit = BURTC_INIT_DEFAULT;
+  burtcInit.compare0Top = true; // reset counter when counter reaches compare value
+  burtcInit.em4comp = true;     // BURTC compare interrupt wakes from EM4 (causes reset)
+  BURTC_Init(&burtcInit);
+
+  BURTC_CounterReset();
+
+  BURTC_CompareSet(0, v);
+
+  BURTC_IntEnable(BURTC_IEN_COMP);    // compare match
+  NVIC_EnableIRQ(BURTC_IRQn);
+  BURTC_Enable(true);
+}
 
 /******************************************************************************
  * Application Init
@@ -203,6 +254,8 @@ void app_init(void)
   // Put your additional application init code here!                         //
   // This is called once during start-up.                                    //
   /////////////////////////////////////////////////////////////////////////////
+  alg_init();
+  initBURTC();
 }
 
 /******************************************************************************
@@ -949,7 +1002,13 @@ void sl_bt_on_event(sl_bt_msg_t * evt)
       ota_adv(true);
       break;
 
+    case sl_bt_evt_gatt_server_user_write_request_id:
+      write_characteristic(&evt->data.evt_gatt_server_user_write_request);
+      break;
 
+    case sl_bt_evt_gatt_server_user_read_request_id:
+      read_characteristic(&evt->data.evt_gatt_server_user_read_request);
+      break;
 
     case sl_bt_evt_connection_parameters_id:
       sc = get_instance_number(evt->data.evt_connection_parameters.connection, &instance_num);
