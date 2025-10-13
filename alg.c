@@ -44,7 +44,7 @@ volatile enum gate_state_e gate_state = DOOR_CLOSED;
 
 //Baseline range is 1 - 99
 uint32_t BASELINE_WEIGHT = 10;
-uint32_t MOVING_THRESHOLD = 1000;
+uint32_t MOVING_THRESHOLD_MM = 1000;
 uint32_t OPEN_BLOCK_DELAY_MS = 8000;
 uint32_t CLOSE_BLOCK_DELAY_MS = 10000;
 
@@ -234,18 +234,18 @@ void process_measure(uint8_t index, cs_initiator_instances_t * instances)
       reflector_state[index] = MOVING;
       break;
     case MOVING:
+      /* This state is used to determine direction of mouvement */
       if (distance <= DISTANCE_RED_ZONE)
       {
         reflector_state[index] = RED_ZONE;
         break;
       }
-      /* This state is used to determine direction of mouvement */
-      if (distance >= (baseline[index] + MOVING_THRESHOLD))
+      if (distance >= (baseline[index] + MOVING_THRESHOLD_MM))
       /* We are moving away */
       {
         try_close_gate();
       }
-      else if ((distance +  MOVING_THRESHOLD) < baseline[index])
+      else if ((distance +  MOVING_THRESHOLD_MM) < baseline[index])
       /* We are moving closer */
       {
         try_open_gate(distance);
@@ -275,7 +275,7 @@ void alg_init()
   }
 
   /* data is in deci-meter, convert to mm */
-  MOVING_THRESHOLD = data * 10 * 10;
+  MOVING_THRESHOLD_MM = data * 10 * 10;
 
   /*-------------------------------------------------------------------------*/
 

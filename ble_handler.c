@@ -4,10 +4,11 @@
 #include "sl_bt_api.h"
 #include "config/token.h"
 #include "autogen/gatt_db.h"
+#include "cmsis_nvic_virtual.h"
 
 
 extern uint32_t BASELINE_WEIGHT;
-extern uint32_t MOVING_THRESHOLD;
+extern uint32_t MOVING_THRESHOLD_MM;
 extern uint32_t OPEN_BLOCK_DELAY_MS;
 extern uint32_t CLOSE_BLOCK_DELAY_MS;
 
@@ -31,9 +32,13 @@ void write_characteristic(sl_bt_evt_gatt_server_user_write_request_t * request)
        key = NVM3KEY_DEVICE_CLOSE_TIME;
        CLOSE_BLOCK_DELAY_MS = (uint32_t)request->value.data * 1000;
        break;
+     case gattdb_RESET:
+       NVIC_SystemReset();
+       break;
+     case gattdb_MOVING_THRESHOLD:
      default:
        key = NVM3KEY_DEVICE_MOVING_THRESHOLD;
-       MOVING_THRESHOLD = (uint32_t)request->value.data * 10 * 10;
+       MOVING_THRESHOLD_MM = (uint32_t)request->value.data * 10 * 10;
        break;
    }
 
@@ -53,7 +58,7 @@ void read_characteristic(sl_bt_evt_gatt_server_user_read_request_t * request)
    sl_status_t sc = SL_STATUS_OK;
    nvm3_ObjectKey_t key = NVM3KEY_DEVICE_MOVING_THRESHOLD;
    uint8_t data;
-   uint8_t sent_len;
+   uint16_t sent_len;
 
    switch (request->characteristic)
    {
@@ -66,6 +71,7 @@ void read_characteristic(sl_bt_evt_gatt_server_user_read_request_t * request)
      case gattdb_CLOSE_TIME:
        key = NVM3KEY_DEVICE_CLOSE_TIME;
        break;
+     case gattdb_MOVING_THRESHOLD:
      default:
        key = NVM3KEY_DEVICE_MOVING_THRESHOLD;
        break;

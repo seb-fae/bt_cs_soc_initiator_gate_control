@@ -86,5 +86,13 @@
         <write authenticated="false" bonded="false" encrypted="false"/>
       </properties>
     </characteristic>
+
+    <!--Reset-->
+    <characteristic const="false" id="RESET" name="Reset" sourceId="" uuid="b4674906-3136-47e6-b55c-f9f953dd2001">
+      <value length="0" type="user" variable_length="false">00</value>
+      <properties>
+        <write authenticated="false" bonded="false" encrypted="false"/>
+      </properties>
+    </characteristic>
   </service>
 </gatt>
